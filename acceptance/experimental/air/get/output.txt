@@ -1,6 +1,6 @@
 
 === get (text)
->>> [CLI] experimental air get run 123
+>>> [CLI] experimental air get 123
 
 ╭─ Configuration ────────────────────────────────────────────────╮
 │                                                                │
@@ -33,7 +33,7 @@
 
 
 === get (json)
->>> [CLI] experimental air get run 123 -o json
+>>> [CLI] experimental air get 123 -o json
 {
   "v": 1,
   "ts": "[TIMESTAMP]",
@@ -50,13 +50,13 @@
 }
 
 === invalid run id
->>> [CLI] experimental air get run notanumber
+>>> [CLI] experimental air get notanumber
 Error: invalid JOB_RUN_ID "notanumber": must be a positive integer
 
 Exit code: 1
 
 === invalid run id (json)
->>> [CLI] experimental air get run notanumber -o json
+>>> [CLI] experimental air get notanumber -o json
 {
   "v": 1,
   "ts": "[TIMESTAMP]",
