@@ -14,6 +14,7 @@ import (
 	"github.com/databricks/cli/bundle"
 	"github.com/databricks/cli/cmd/bundle/utils"
 	"github.com/databricks/cli/libs/auth"
+	"github.com/databricks/cli/libs/cmdctx"
 	"github.com/databricks/cli/libs/cmdio"
 	databricks "github.com/databricks/databricks-sdk-go"
 	"github.com/databricks/databricks-sdk-go/client"
@@ -68,6 +69,7 @@ func testCommand() *cobra.Command {
 	var selectors []string
 	var junitXML string
 	var noWait bool
+	var pipelineID string
 
 	cmd := &cobra.Command{
 		Use:   "test [KEY] [PYTEST_NODE...] -- [RUNNER_ARG...]",
@@ -85,33 +87,49 @@ Arguments after -- are forwarded to the configured test runner:
 	cmd.Flags().StringSliceVar(&selectors, "select", nil, "Pytest node selectors to run.")
 	cmd.Flags().StringVar(&junitXML, "junit-xml", "", "Write test results to a local JUnit XML file.")
 	cmd.Flags().BoolVar(&noWait, "no-wait", false, "Return after starting the test update.")
+	cmd.Flags().StringVar(&pipelineID, "pipeline-id", "", "Run tests on a pipeline ID without bundle resolution.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		b, err := utils.ProcessBundle(cmd, utils.ProcessOptions{InitIDs: true})
-		if err != nil {
-			return err
-		}
-		key, positionalSelectors, err := resolvePipelineTestArguments(cmd.Context(), b, args, cmd.ArgsLenAtDash())
-		if err != nil {
-			return err
-		}
-		pipelineID, err := resolvePipelineIdFromKey(cmd.Context(), b, key)
-		if err != nil {
-			return err
-		}
-
 		var runnerArgs []string
+		beforeDash := args
 		if dash := cmd.ArgsLenAtDash(); dash >= 0 {
+			beforeDash = args[:dash]
 			runnerArgs = args[dash:]
 		}
-		allSelectors := append(selectors, positionalSelectors...)
-		allSelectors = resolveWorkspaceTestSelectors(b.Config.Workspace.FilePath, allSelectors)
-		if len(sourcePaths) == 0 {
-			sourcePaths = []string{b.Config.Workspace.FilePath}
+		var w *databricks.WorkspaceClient
+		var positionalSelectors []string
+		if pipelineID != "" {
+			w = cmdctx.WorkspaceClient(cmd.Context())
+			positionalSelectors = beforeDash
+		} else {
+			b, err := utils.ProcessBundle(cmd, utils.ProcessOptions{InitIDs: true})
+			if err != nil {
+				return err
+			}
+			key, bundleSelectors, err := resolvePipelineTestArguments(
+				cmd.Context(),
+				b,
+				args,
+				cmd.ArgsLenAtDash(),
+			)
+			if err != nil {
+				return err
+			}
+			pipelineID, err = resolvePipelineIdFromKey(cmd.Context(), b, key)
+			if err != nil {
+				return err
+			}
+			positionalSelectors = bundleSelectors
+			positionalSelectors = resolveWorkspaceTestSelectors(b.Config.Workspace.FilePath, positionalSelectors)
+			selectors = resolveWorkspaceTestSelectors(b.Config.Workspace.FilePath, selectors)
+			if len(sourcePaths) == 0 {
+				sourcePaths = []string{b.Config.Workspace.FilePath}
+			}
+			sourcePaths = resolveWorkspaceTestSelectors(b.Config.Workspace.FilePath, sourcePaths)
+			w = b.WorkspaceClient(cmd.Context())
 		}
-		sourcePaths = resolveWorkspaceTestSelectors(b.Config.Workspace.FilePath, sourcePaths)
 
-		w := b.WorkspaceClient(cmd.Context())
+		allSelectors := append(selectors, positionalSelectors...)
 		updateID, err := startPipelineTest(cmd.Context(), w, pipelineID, pipelineTestDetails{
 			SourcePaths: sourcePaths,
 			Selectors:   allSelectors,
