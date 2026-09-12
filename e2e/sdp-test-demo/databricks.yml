@@ -1,0 +1,25 @@
+bundle:
+  name: sdp-test-e2e-demo
+
+workspace:
+  host: https://dbc-d59f7e4c-69b1.dev.databricks.com
+  root_path: /Workspace/Users/pranshu.pandya@databricks.com/.bundle/${bundle.name}/${bundle.target}
+
+resources:
+  pipelines:
+    orders:
+      name: "[${bundle.target}] SDP pytest E2E"
+      development: true
+      continuous: false
+      serverless: false
+      libraries:
+        - file:
+            path: ./src/orders_pipeline.py
+      environment:
+        dependencies:
+          - pytest
+
+targets:
+  dev:
+    default: true
+    mode: development
